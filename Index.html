@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Jarvis</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#8fe8ff;font-family:-apple-system,Helvetica,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);background:radial-gradient(circle at 50% 38%,#032a40 0%,#01101b 55%,#000 100%)}
+body:before{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(0,212,255,.04) 0,rgba(0,212,255,.04) 1px,transparent 1px,transparent 4px);pointer-events:none}
+.title{text-align:center;font-size:12px;letter-spacing:10px;margin-top:10px;opacity:.8;position:relative}
+#cfg{position:absolute;right:0;top:-4px;background:transparent;color:#8fe8ff;border:0;font-size:18px;padding:0 6px}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+.hud{position:relative;width:min(86vw,380px);aspect-ratio:1}
+.hud svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ring{transform-box:fill-box;transform-origin:center;fill:none;stroke:#00d4ff}
+.a{animation:rot 24s linear infinite}
+.b{animation:rot 16s linear infinite reverse}
+.c{animation:rot 10s linear infinite}
+.d{animation:rot 40s linear infinite reverse}
+.speaking .a{animation-duration:6s}.speaking .b{animation-duration:4s}.speaking .c{animation-duration:2.5s}
+.thinking .c{animation-duration:1.2s}
+@keyframes rot{to{transform:rotate(360deg)}}
+.core{position:absolute;left:50%;top:50%;width:34%;height:34%;margin:-17% 0 0 -17%;border-radius:50%;background:radial-gradient(circle,#eaffff 0%,#5ff0ff 25%,#00b8e6 55%,rgba(0,120,170,.2) 80%,transparent 100%);box-shadow:0 0 40px #00d4ff,0 0 90px rgba(0,212,255,.6);animation:br 3.5s ease-in-out infinite;transition:transform .09s}
+.speaking .core{animation:none}
+.thinking .core{animation:br .8s ease-in-out infinite}
+@keyframes br{50%{transform:scale(1.12);box-shadow:0 0 60px #00d4ff,0 0 120px rgba(0,212,255,.7)}}
+.stat{text-align:center;font-size:11px;letter-spacing:6px;opacity:.7;margin:2px 0 6px}
+#out{max-height:24vh;overflow-y:auto;border-top:1px solid #0a6a85;border-bottom:1px solid #0a6a85;padding:10px 4px;font-size:15px;line-height:1.4;white-space:pre-wrap;background:rgba(0,212,255,.05)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px}
+button{background:#00d4ff;color:#02202b;border:0;border-radius:20px;padding:0 16px;font-weight:700}
+.chips button{background:transparent;color:#00d4ff;border:1px solid #0a6a85;font-weight:400;white-space:nowrap;padding:8px 12px;font-size:13px}
+.bar{display:flex;gap:8px;padding:6px 0 8px}
+input{flex:1;background:#03141f;border:1px solid #00d4ff;color:#dff;border-radius:20px;padding:12px 14px;font-size:16px;outline:none}
+</style></head>
+<body>
+<div class="title">J.A.R.V.I.S.<button id="cfg" onclick="reset()">⚙</button></div>
+<div class="stage"><div class="hud idle" id="hud">
+<svg viewBox="0 0 400 400">
+<circle class="ring d" cx="200" cy="200" r="190" stroke-width="1" stroke-dasharray="2 8"/>
+<circle class="ring a" cx="200" cy="200" r="178" stroke-width="5" stroke-dasharray="90 40 30 40" opacity=".8"/>
+<circle class="ring b" cx="200" cy="200" r="152" stroke-width="2" stroke-dasharray="4 6"/>
+<circle class="ring c" cx="200" cy="200" r="128" stroke-width="8" stroke-dasharray="60 120" opacity=".9"/>
+<circle class="ring a" cx="200" cy="200" r="104" stroke-width="2" stroke-dasharray="20 10 5 10"/>
+<circle cx="200" cy="200" r="88" fill="none" stroke="#00d4ff" stroke-width="1" opacity=".5"/>
+</svg>
+<div class="core" id="core"></div>
+</div></div>
+<div class="stat" id="stat">ONLINE</div>
+<div id="out">Buongiorno. Tutti i sistemi sono operativi. Come posso aiutarti?</div>
+<div class="chips">
+<button onclick="proposte()">📩 Proposte</button>
+<button onclick="chiedi('Riassumi le ultime proposte e dimmi quale conviene di più')">⭐ La migliore</button>
+<button id="vb" onclick="toggleVoce()">🔊 Voce on</button>
+<button id="mic" onclick="toggleAscolto()">🎤 Ascolto off</button>
+</div>
+<div class="bar">
+<input id="q" placeholder="Chiedi a Jarvis..." onkeydown="if(event.key==='Enter')chiedi()">
+<button onclick="chiedi()">Invia</button>
+</div>
+<script>
+var hud=document.getElementById('hud'),core=document.getElementById('core'),stat=document.getElementById('stat'),out=document.getElementById('out'),inp=document.getElementById('q'),vb=document.getElementById('vb'),mic=document.getElementById('mic');
+var voce=true,anim=null,safety=null,fine=0;
+var NOMI={idle:'ONLINE',thinking:'ELABORAZIONE',speaking:'RISPONDO'};
+function cfg(k){try{return localStorage.getItem(k)||''}catch(e){return ''}}
+function salva(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function reset(){try{localStorage.removeItem('jurl');localStorage.removeItem('jcod')}catch(e){}out.textContent='Impostazioni cancellate. Riavvia la pagina per reinserirle.'}
+function setup(){
+if(!cfg('jurl')){var u=prompt("Incolla l'URL di Apps Script (finisce con /exec)");if(u)salva('jurl',u.trim())}
+if(!cfg('jcod')){var c=prompt('Scrivi il tuo codice segreto');if(c)salva('jcod',c.trim())}}
+function setState(s){hud.className='hud '+s;stat.textContent=NOMI[s];clearInterval(anim);core.style.transform='';
+if(s==='speaking'){anim=setInterval(function(){core.style.transform='scale('+(1+Math.random()*0.4)+')'},110)}}
+function sblocca(){if(!window.speechSynthesis)return;var u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}
+function parla(t){
+if(!voce||!window.speechSynthesis){setState('idle');return}
+speechSynthesis.cancel();
+var u=new SpeechSynthesisUtterance(t);u.lang='it-IT';
+var vs=speechSynthesis.getVoices(),pref=['Emma','Federica','Paola','Alice','Elsa','Silvia'],sc=null;
+for(var k=0;k<pref.length&&!sc;k++){for(var i=0;i<vs.length;i++){if(vs[i].lang.indexOf('it')===0&&vs[i].name.indexOf(pref[k])>-1){sc=vs[i];break}}}
+if(!sc){for(var j=0;j<vs.length;j++){if(vs[j].lang.indexOf('it')===0){sc=vs[j];break}}}
+if(sc)u.voice=sc;u.rate=0.95;u.pitch=1.05;
+u.onstart=function(){setState('speaking')};
+u.onend=u.onerror=function(){clearTimeout(safety);fine=Date.now();setState('idle')};
+speechSynthesis.speak(u);
+clearTimeout(safety);safety=setTimeout(function(){setState('idle')},t.length*90+3000)}
+function api(payload,ok,ko){
+setup();
+payload.codice=cfg('jcod');
+fetch(cfg('jurl'),{method:'POST',body:JSON.stringify(payload)})
+.then(function(r){return r.json()}).then(ok).catch(function(e){ko('Impossibile contattare Jarvis. Controlla URL e codice (tasto ⚙).')})}
+function chiedi(t){t=(t||inp.value).trim();if(!t)return;inp.value='';sblocca();
+out.textContent='> '+t;setState('thinking');
+api({testo:t},function(d){if(d.errore){out.textContent=d.errore+'. Tocca ⚙ per reinserire i dati.';setState('idle')}else{out.textContent=d.risposta;parla(d.risposta)}},function(m){out.textContent=m;setState('idle')})}
+function proposte(){setState('thinking');out.textContent='Recupero proposte...';
+api({azione:'proposte'},function(d){setState('idle');if(d.errore){out.textContent=d.errore;return}var a=d.proposte||[];out.textContent=a.length?a.map(function(p){return '📩 '+p.d+'\n'+p.o+'\n'+p.r}).join('\n\n———\n\n'):'Nessuna proposta registrata.'},function(m){out.textContent=m;setState('idle')})}
+function toggleVoce(){voce=!voce;sblocca();vb.textContent=voce?'🔊 Voce on':'🔇 Voce off';if(!voce){speechSynthesis.cancel();setState('idle')}}
+var rec=null,asc=false,att=false;
+function toggleAscolto(){
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR){out.textContent='Riconoscimento vocale non disponibile. Usa il microfono della tastiera.';return}
+if(asc){asc=false;if(rec)rec.stop();mic.textContent='🎤 Ascolto off';return}
+sblocca();
+rec=new SR();rec.lang='it-IT';rec.continuous=true;rec.interimResults=false;
+rec.onresult=function(e){
+if(hud.className.indexOf('idle')<0||Date.now()-fine<1500)return;
+var t=e.results[e.results.length-1][0].transcript.trim(),l=t.toLowerCase();
+if(att){att=false;chiedi(t);return}
+var i=l.indexOf('jarvis');if(i<0)return;
+var c=t.slice(i+6).replace(/^[\s,.:!?]+/,'');
+if(c){chiedi(c)}else{att=true;out.textContent='Dimmi...';parla('Dimmi')}};
+rec.onerror=function(e){if(e.error==='not-allowed'||e.error==='service-not-allowed'){asc=false;mic.textContent='🎤 Ascolto off';out.textContent='Microfono non consentito. Controlla Impostazioni > Safari > Microfono.'}};
+rec.onend=function(){if(asc){try{rec.start()}catch(x){}}};
+try{rec.start();asc=true;mic.textContent='🎤 Di\' "Jarvis..."'}catch(x){out.textContent='Impossibile attivare il microfono.'}}
+</script>
+</body></html>
