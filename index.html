@@ -44,6 +44,7 @@ header{display:flex;justify-content:space-between;align-items:center;padding:10p
 input{flex:1;min-width:0;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(217,246,255,.25);color:var(--mist);border-radius:999px;padding:13px 18px;font-size:16px;outline:none}
 input:focus{border-color:var(--ac)}
 #send{background:var(--ac);color:#021018;border:0;border-radius:999px;padding:0 22px;font:600 14px var(--hf)}
+#f{display:none}
 button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.hud{animation:none}}
 </style></head>
@@ -53,9 +54,11 @@ button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 <header><span class="brand">Jarvis</span><button id="cfg" onclick="reset()" aria-label="Impostazioni">⚙</button></header>
 <div class="stage"><div class="hud idle" id="hud"><canvas id="cv"></canvas></div><div class="stat" id="stat">online</div></div>
 <div id="out">Sistemi operativi. Dimmi pure.</div>
+<input type="file" id="f" accept="image/*" onchange="inviaFoto(this)">
 <div class="chips">
 <button onclick="proposte()">Proposte</button>
 <button onclick="chiedi('Riassumi le ultime proposte e dimmi quale conviene di più')">La migliore</button>
+<button onclick="document.getElementById('f').click()">Foto</button>
 <button id="vb" class="tg on" onclick="toggleVoce()">Voce on</button>
 <button id="mic" class="tg" onclick="toggleAscolto()">Ascolto off</button>
 </div>
@@ -116,6 +119,23 @@ if(c){chiedi(c)}else{att=true;out.textContent='Dimmi…';parla('Dimmi')}};
 rec.onerror=function(e){if(e.error==='not-allowed'||e.error==='service-not-allowed'){micOff();out.textContent='Microfono non consentito. Controlla Impostazioni > Safari > Microfono.'}};
 rec.onend=function(){if(asc){try{rec.start()}catch(x){}}};
 try{rec.start();asc=true;mic.textContent='Dì “Jarvis”';mic.classList.add('on')}catch(x){out.textContent='Impossibile attivare il microfono.'}}
+
+/* Invio foto */
+function inviaFoto(el){
+var f=el.files&&el.files[0];el.value='';
+if(!f)return;
+var t=inp.value.trim();inp.value='';sblocca();
+out.textContent='> Foto'+(t?': '+t:'');setState('thinking');
+var img=new Image(),url=URL.createObjectURL(f);
+img.onload=function(){
+var m=1280,k=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement('canvas');
+c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+URL.revokeObjectURL(url);
+var b64=c.toDataURL('image/jpeg',0.8).split(',')[1];
+api({foto:b64,testo:t},function(d){if(d.errore){out.textContent=d.errore+'. Tocca ⚙ per reinserire i dati.';setState('idle')}else{out.textContent=d.risposta;parla(d.risposta)}},function(m){out.textContent=m;setState('idle')})};
+img.onerror=function(){URL.revokeObjectURL(url);out.textContent='Non riesco a leggere questa foto. Prova con un’altra.';setState('idle')};
+img.src=url}
 
 /* Sfondo a rete 3D + sfera a particelle */
 var BW=0,BH=0,W=0,H=0,t0=0,spin=0,nspin=0,amp=0,rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
